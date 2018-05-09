@@ -2,9 +2,9 @@ import numpy as np
 import cv2
 import time
 
-path_model = "./caffe_models/face_classifier.caffemodel"
-path_proto = "./caffe_models/face_classifier.prototxt.txt"
-net = cv2.dnn.readNetFromCaffe(path_proto, path_model)
+path_facemodel = "./caffe_models/face_classifier.caffemodel"
+path_faceproto = "./caffe_models/face_classifier.prototxt.txt"
+net = cv2.dnn.readNetFromCaffe(path_faceproto, path_facemodel)
 
 cap = cv2.VideoCapture(0)
 
@@ -14,10 +14,10 @@ while True:
     blob = cv2.dnn.blobFromframe(cv2.resize(frame, (300, 300)), 1.0,
                                  (300, 300), (104.0, 177.0, 123.0))
     net.setInput(blob)
-    hands = net.forward()
+    faces = net.forward()
 
     for i in range(0, faces.shape[2]):
-        confidence = detections[0, 0, i, 2]
+        confidence = faces[0, 0, i, 2]
         if confidence > .5:
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
             (startX, startY, endX, endY) = box.astype("int")

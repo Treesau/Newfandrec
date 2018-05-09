@@ -27,7 +27,7 @@ while True:
             cv2.rectangle(frame, (startX, startY), (endX, endY),
                           (0, 0, 255), 2)
             cv2.putText(frame, conf_text, (startX, y),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
             
     cv2.imshow("Output", frame)
     cv2.waitKey(1)
