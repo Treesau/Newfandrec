@@ -1,180 +1,98 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+import cv2
+import numpy as np
+import math
 
-"""A module containing an algorithm for hand gesture recognition"""
-
-import cv2, numpy as np
-
-
-class HandGestureRecognition:
-    """Hand gesture recognition class
-        This class implements an algorithm for hand gesture recognition
-        based on a single-channel input image showing the segmented arm region,
-        where pixel values stand for depth. The algorithm will then find the hull
-        of the segmented hand region and convexity defects therein. Based on this
-        information,an estimate on the number of extended fingers is derived.
+class HandGestureRecognitions:
     """
-
+    """
+    low_skin = np.array([0,20,70], dtype=np.uint8)
+    high_skin = np.array([20,255,255], dtype=np.uint8)
+    kernel = np.ones((3,3),np.uint8)
+    
     def __init__(self):
-        """Class constructor
-            initializes all necessary parameters.
         """
-        # maximum depth deviation for a pixel to be considered within range
-        self.abs_depth_dev = 14
-
-        # cut-off angle (deg): everything below this is a convexity point that
-        # belongs to two extended fingers
-        self.thresh_deg = 80.0
-
-    def recognize(self, img_gray):
-        """Recognizes hand gesture in a single-channel depth image
-            This method estimates the number of extended fingers based on
-            a single-channel depth image showing a hand and arm region.
-            :param img_gray: single-channel depth image
-            :returns: (num_fingers, img_draw) The estimated number of
-                       extended fingers and an annotated RGB image
         """
-        self.height, self.width = img_gray.shape[:2]
 
-        # segment arm region
-        segment = self._segment_arm(img_gray)
-
-        # find the hull of the segmented area, and based on that find the
-        # convexity defects
-        contours, defects = self._find_hull_defects(segment)
-
-        # detect the number of fingers depending on the contours and convexity
-        # defects, then draw defects that belong to fingers green, others red
-        img_draw = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2RGB)
-        num_fingers, img_draw = self._detect_num_fingers(contours,
-                                                           defects, img_draw)
-
-        return (num_fingers, img_draw)
-
-    def _segment_arm(self, frame):
-        """Segments arm region
-            This method accepts a single-channel depth image of an arm and
-            hand region and extracts the segmented arm region.
-            It is assumed that the hand is placed in the center of the image.
-            :param frame: single-channel depth image
-            :returns: binary image (mask) of segmented arm region, where
-                      arm=255, else=0
+    def recognize(self, roi):
         """
-        # find center region of frame
-        #cv2.imshow("frame", frame)
-        center_kernel = 10
-        center = frame[self.height//2-center_kernel:self.height//2+center_kernel,
-                       self.width//2-center_kernel:self.width//2+center_kernel]
-
-        # find median depth value of center region
-        med_val = np.median(center)
+        """
+        h,w = roi.shape[:2]
+        roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
         
-        frame = np.where(abs(frame - med_val) <= self.abs_depth_dev,
-                         128, 0).astype(np.uint8)
-        # morphological
-        kernel = np.ones((3, 3), np.uint8)
-        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
 
-        # connected component
-        small_kernel = 3
-        frame[self.height//2-small_kernel:self.height//2+small_kernel,
-              self.width//2-small_kernel:self.width//2+small_kernel] = 128
-        mask = np.zeros((self.height+2, self.width+2), np.uint8)
-        
-        flood = frame.copy()
-        cv2.floodFill(flood, mask, (self.width//2, self.height//2), 255,
-                      flags=4 | (255 << 8))
-        ret, flooded = cv2.threshold(flood, 129, 255, cv2.THRESH_BINARY)
-        return flooded
+        self.h, self.w = roi.shape[:2]
 
-    def _find_hull_defects(self, segment):
-        """Find hull defects
-            This method finds all defects in the hull of a segmented arm
-            region.
-            :param segment: a binary image (mask) of a segmented arm region,
-                            where arm=255, else=0
-            :returns: (max_contour, defects) the largest contour in the image
-                      and all corresponding defects
+    def _segmentHand(self, roi):
         """
-        segment, contours, hierarchy = cv2.findContours(segment, cv2.RETR_TREE,
-                                               cv2.CHAIN_APPROX_SIMPLE)
+        """
+        mask = cv2.inRange(hsv, self.low_skin, high_skin)
+        mask = dilate(mask, kernel, iterations)
+        mask = cv2.GaussianBlur(mask,(5,5),100)
 
-        # find largest area contour
-        max_contour = max(contours, key=cv2.contourArea)
         
-            
-        epsilon = 0.01*cv2.arcLength(max_contour, True)
-        max_contour = cv2.approxPolyDP(max_contour, epsilon, True)
+        
 
-        # find convexity hull and defects
-        hull = cv2.convexHull(max_contour, returnPoints=False)
+    def _findHullDefects(self, segment):
+        """
+        """
+        _,contours,hierarchy = cv2.findContours(mask,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_contour = max(contours, key = lambda x: cv2.contourArea(x))
+        
+        epsilon = 0.0005*cv2.arcLength(max_contour, True)
+        approx= cv2.approxPolyDP(max_contour, epsilon, True)
+
+        hull = cv2.convexHull(max_contour)
         defects = cv2.convexityDefects(max_contour, hull)
 
         return (max_contour, defects)
 
-    def _detect_num_fingers(self, contours, defects, img_draw):
-        """Detects the number of extended fingers, based on a contour and
-            convexity defects. It will annotate an RGB color image of the
-            segmented arm region with all relevant defect points and the hull.
-            :param contours: a list of contours
-            :param defects: a list of convexity defects
-            :param img_draw: an RGB color image to be annotated
-            :returns: (num_fingers, img_draw) the estimated number of extended
-                      fingers and an annotated RGB color image
+##        # define area of hull and area of hand
+##        areahull = cv2.contourArea(hull)
+##        areacnt = cv2.contourArea(max_contour)
+
+    def _detectGesture(self, contours, defects, d_roi):
         """
-
-        # if there are no convexity defects, possibly no hull found or no
-        # fingers extended
+        """
         if defects is None:
-            return [0, img_draw]
+            return ['0', d_roi]
 
-        # assume the wrist generates two convexity defects (one on each
-        # side), so if there are no additional defect points, there are no
-        # fingers extended
         if len(defects) <= 2:
-            return [0, img_draw]
+            return ['0', d_roi]
 
-        # if there is a sufficient amount of convexity defects, we will find a
-        # defect point between two fingers so to get the number of fingers,
-        # start counting at 1
         num_fingers = 1
 
         for i in range(defects.shape[0]):
-            # each defect point is a 4-tuple
-            start_idx, end_idx, farthest_idx, _ = defects[i, 0]
+            start_idx, end_idx, farthest_idx, _ = defects[i,0]
             start = tuple(contours[start_idx][0])
             end = tuple(contours[end_idx][0])
             far = tuple(contours[farthest_idx][0])
 
-            # draw the hull
-            cv2.line(img_draw, start, end, [0, 255, 0], 2)
+            cv2.line(d_roi, start, end, [0, 255, 0], 2)
 
-            # if angle is below a threshold, defect point belongs to two
-            # extended fingers
             if angle_rad(np.subtract(start, far),
                          np.subtract(end, far)) < deg2rad(self.thresh_deg):
 
                 num_fingers += 1
 
                 # draw point as green
-                cv2.circle(img_draw, far, 5, [0, 255, 0], -1)
+                cv2.circle(d_roi, far, 5, [0, 255, 0], -1)
             else:
                 # draw point as red
-                cv2.circle(img_draw, far, 5, [255, 0, 0], -1)
+                cv2.circle(d_roi, far, 5, [255, 0, 0], -1)
 
-        return (min(5, num_fingers), img_draw)
+        return (min(5, num_fingers), d_roi)
 
-
-def angle_rad(v1, v2):
-    """Angle in radians between two vectors
-        returns the angle (in radians) between two array-like vectors
-    """
-    return np.arctan2(np.linalg.norm(np.cross(v1, v2)), np.dot(v1, v2))
-
-
-def deg2rad(angle_deg):
-    """Convert degrees to radians
+    def angleRad(v1, v2):
+        """Convert degrees to radians
         This method converts an angle in radians e[0,2*np.pi) into degrees
         e[0,360)
-    """
-    return angle_deg//180.0*np.pi
+        """
+        return np.arctan2(np.linalg.norm(np.cross(v1, v2)), np.dot(v1, v2))
+        
+    def deg2Rad(angle_deg):
+        """Angle in radians between two vectors
+        returns the angle (in radians) between two array-like vectors
+        """
+        return angle_deg//180.0*np.pi
+        
