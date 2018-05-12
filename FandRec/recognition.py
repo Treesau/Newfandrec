@@ -1,4 +1,4 @@
-import sys, cv2, numpy as np, os, time
+import sys, cv2, numpy as np, os, time, dlib
 from pathlib import Path
 from gesture import *
 from database import DBHelper
@@ -14,11 +14,8 @@ class Recognition:
     path_facemodel = "./caffe_models/face_classifier.caffemodel"
     path_faceproto = "./caffe_models/face_classifier.prototxt.txt"
     facenet = cv2.dnn.readNetFromCaffe(path_faceproto, path_facemodel)
-
-    path_handmodel = "./caffe_models/hand_classifier.caffemodel"
-    path_handproto = "./caffe_models/hand_classifier.prototxt"
-    handnet = cv2.dnn.readNetFromCaffe(path_faceproto, path_facemodel)
-
+    
+    hand_detector = dlib.simple_object_detector("detector.svm")
     gesture_recognizer = HandGestureRecognition()
     font = cv2.FONT_HERSHEY_SIMPLEX
     sample_size = 100
@@ -31,6 +28,7 @@ class Recognition:
         self.frame_dimensions = None
         self.samples = 0
         self.sample_images = []
+        self.gest_trackers = []
         self.last_gest = ""
         rec_trained = False
         # bools for altering webpage control flow
@@ -78,15 +76,29 @@ class Recognition:
         """
         """ 
         if self.samples < self.sample_size:
+
             frame, faces = self._findFaces(frame)
-            if len(faces) > 1:
-                pass
-            else:
-                for (startX,startY,endX,endY) in faces:
-                    self.samples += 1
-                    gray = cv2.UMat(gray, [startY,endY], [startX,endX])
-                    gray = cv2.resize(gray, (100, 100))
-                    self.sample_images.append(gray)
+            
+            max_area = 0
+            x = 0
+            y = 0
+            w = 0
+            h = 0
+            
+            for (startX,startY,endX,endY) in faces:
+                c_w = endX - startX
+                c_h = endY - startY
+                if c_w * c_h > max_area:
+                    x = startX
+                    y = startY
+                    w = _w
+                    h = _h
+                    maxArea = w*h
+                    
+            self.samples += 1
+            gray = cv2.UMat(gray, [startY,endY], [startX,endX])
+            gray = cv2.resize(gray, (100, 100))
+            self.sample_images.append(gray)
                     
         else:   # finished collecting face data
             db = DBHelper()
@@ -124,42 +136,44 @@ class Recognition:
         gesture = "0"
         num_fingers = 0
 
-        d_frame, faces = self._findFaces(frame)
-        for (startX,startY,endX,endY) in faces:
+        if self.gesture_trackers.empty():
+            d_frame, faces = self._findFaces(frame)
             
-            y = startY - 10 if startY - 10 > 10 else startY + 10
-            gray = cv2.UMat(gray, [startY,endY], [startX,endX])
-            gray = cv2.resize(gray, (100, 100))
-            user_id, confidence = self.recognizer.predict(cv2.UMat(gray,
-                                                                   [startY,endY],
-                                                                   [startX,endX]))
-            if confidence <= 80:
-                db = DBHelper()
-                username = db.getUsernameById(user_id)
-                cv2.putText(d_frame, username,
-                            (startX, y),
-                            self.font, .6,
-                            (225,105,65), 2)
+            for (startX,startY,endX,endY) in faces:
+                y = startY - 10 if startY - 10 > 10 else startY + 10
+                gray = cv2.UMat(gray, [startY,endY], [startX,endX])
+                gray = cv2.resize(gray, (100, 100))
+                user_id, confidence = self.recognizer.predict(cv2.UMat(gray,
+                                                                       [startY,endY],
+                                                                       [startX,endX]))
+                if confidence <= 80:
+                    db = DBHelper()
+                    username = db.getUsernameById(user_id)
+                    cv2.putText(d_frame, username,
+                                (startX, y),
+                                self.font, .6,
+                                (225,105,65), 2)
 
-                frame, hands = self._findHands(frame)
-                for (startX,startY,endX,endY) in hands:
+                    frame, hands = self._findHands(frame)
+                    for (startX,startY,endX,endY) in hands:
+                        tracked_hand = GestureTracker(frame,
+                                                      (startX,startY,endX,endY))
+                        self.gesture_trackers.append(tracked_hand)
+                        
+                else:
+                    cv2.putText(d_frame, "unknown",
+                                (startX, y),
+                                self.font, .6,
+                                (0, 0, 255), 2)   
                     
-                    # calculate center point of detected hand
-                    c_x = startX//2 + startX
-                    c_y = startY//2 + startY
+            return (d_frame, username, gesture)
 
-                    gest, d_hand = self.gesture_recognizer.recognize(depth[startY:endY,
-                                                                           startX:endX])
-                    d_frame[startY:endY,startX:endX] = d_hand
-                    self.last_gest = gest
-
-            else:
-                cv2.putText(d_frame, "unknown",
-                            (startX, y),
-                            self.font, .6,
-                            (0, 0, 255), 2)   
-                
-        return (d_frame, username, gesture)
+        else:
+            s = 15
+            gest, d_hand = self.gesture_recognizer.recognize(depth[startY-s:endY+s,
+                                                                               startX-s:endX+s])
+            d_frame[startY-s:endY+s,startX-s:endX+s] = d_hand
+            self.last_gest = gest
     
 
     def _findFaces(self, frame):
@@ -190,25 +204,15 @@ class Recognition:
     def _findHands(self, frame):
         """
         """
-        blob = cv2.dnn.blobFromframe(cv2.resize(frame, (300, 300)), 1.0,
-                                 (300, 300), (104.0, 177.0, 123.0))
-        self.handnet.setInput(blob)
-        detected_hands = self.handnet.forward()
-        h,w = self.frame_dimensions
-        hand_regions = []
+        detections = self.hand_detector(frame)
+        hand_rects = []
+        
+        for k, d in enumerate(hand_rects):
+            hand_rects.append(d.left(), d.top(), d.right(), d.bottom())
+            cv2.rectangle(frame, hand_rects(k),
+                          (0, 0, 255), 2)
 
-        for i in range(0, detected_hands.shape[2]):
-            confidence = detected_hands[0,0,i,2]
-            if confidence > .5:
-                box = detected_hands[0,0,i,3*7] * np.array([w,h,w,h])
-                (startX, startY, endX, endY) = box.astype("int")
-
-                hand_regions.append(startX, startY, endX, endY)
-                
-                cv2.rectangle(frame, (startX, startY), (endX, endY),
-                              (0, 0, 255), 2)
-
-        return (frame, hand_regions)
+        return (frame, hand_rects)
     
 
     def _displayProgress(self, frame):
@@ -240,6 +244,55 @@ class Recognition:
         self.is_registering = False
         self.samples = 0
         self.sample_images = []
+
+class GestureTracker:
+
+    gesture_timeout = 3
+    
+    def __init__(self, frame, rect):
+        self.start_time = time.time()
+        self.corr_tracker = dlib.correlation_tracker()
+        startX,startY,endX,endY = rect
+        self.corr_tracker.start_track(frame, dlib.rectangle(startX, startY,
+                                                            endX, endY))
+
+    def update(self, frame):
+        tracking_quality = self.corr_tracker.update(frame)
+        if tracking_quality >= 7:
+            tracked_position = tracker.get_position()
+            x = int(tracked_position.left())
+            y = int(tracked_position.top())
+            w = int(tracked_position.width())
+            h = int(tracked_position.height())
+            cv2.rectangle(frame, (x, y),
+                          (x + w, y + h),
+                          (0,255,0), 2)
+            return (x,y,w,h)
+        
+
+
+if __name__ == "__main__":
+    
+    rec = Recognition()
+    db = DBHelper()
+    cam = cv2.VideoCapture(0)
+    user = ""
+    
+    response = input("Register new user? y or n \n")
+    if response == 'y':
+        rec.is_registering = True
+        user = input("Enter a username: ")
+        db.createUser([user, "", "", ""])
+    else:
+        rec.is_registering = False
+    while (True):
+        ret, frame = cam.read()
+        out, user, gest = rec.processFrame(frame, user)
+        cv2.imshow("out", out)
+        print(user + " " + gest)
+        cv2.waitKey(1)
+    cam.release()
+    cv2.destroyAllWindows()
 
     
         

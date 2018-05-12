@@ -2,9 +2,9 @@ import numpy as np
 import cv2
 import time
 
-path_facemodel = "./caffe_models/face_classifier.caffemodel"
-path_faceproto = "./caffe_models/face_classifier.prototxt.txt"
-net = cv2.dnn.readNetFromCaffe(path_faceproto, path_facemodel)
+path_handmodel = "./FandRec/caffe_models/hand_classifier.caffemodel"
+path_handproto = "./FandRec/caffe_models/hand_classifier.prototxt"
+net = cv2.dnn.readNetFromCaffe(path_handproto, path_handmodel)
 
 cap = cv2.VideoCapture(0)
 
@@ -14,12 +14,12 @@ while True:
     blob = cv2.dnn.blobFromframe(cv2.resize(frame, (300, 300)), 1.0,
                                  (300, 300), (104.0, 177.0, 123.0))
     net.setInput(blob)
-    faces = net.forward()
+    detected_hands = net.forward()
 
-    for i in range(0, faces.shape[2]):
-        confidence = faces[0, 0, i, 2]
+    for i in range(0, detected_hands.shape[2]):
+        confidence = detected_hands[0, 0, i, 2]
         if confidence > .5:
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+            box = detected_hands[0, 0, i, 3:7] * np.array([w, h, w, h])
             (startX, startY, endX, endY) = box.astype("int")
 
             conf_text = "{:.2f}%".format(confidence * 100)
@@ -27,7 +27,7 @@ while True:
             cv2.rectangle(frame, (startX, startY), (endX, endY),
                           (0, 0, 255), 2)
             cv2.putText(frame, conf_text, (startX, y),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
             
     cv2.imshow("Output", frame)
     cv2.waitKey(1)

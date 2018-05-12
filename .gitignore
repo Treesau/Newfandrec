@@ -100,3 +100,5 @@ ENV/
 # mypy
 .mypy_cache/
 caffe_models/
+resources/
+FandRec/deephand/
