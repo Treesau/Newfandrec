@@ -5,60 +5,52 @@ import math
 class HandGestureRecognition:
     """
     """
-    low_skin = np.array([0,20,70], dtype=np.uint8)
-    high_skin = np.array([20,255,255], dtype=np.uint8)
-    kernel = np.ones((3,3),np.uint8)
     
     def __init__(self):
         """
         """
+        self.low_skin = np.array([0,20,70], dtype=np.uint8)
+        self.high_skin = np.array([20,255,255], dtype=np.uint8)
+        self.kernel = kernel = np.ones((3,3),np.uint8)
+        self.angle_cuttoff = 80.0
 
-    def recognize(self, roi):
+    def recognize(self, img):
         """
         """
-        h,w = roi.shape[:2]
-        roi_hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        
-
-        self.h, self.w = roi.shape[:2]
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        segment = self._segmentHand(hsv)
+        contours, defects = self._findHullDefects(segment)
 
     def _segmentHand(self, roi):
         """
         """
-        mask = cv2.inRange(hsv, self.low_skin, high_skin)
-        mask = dilate(mask, kernel, iterations)
-        mask = cv2.GaussianBlur(mask,(5,5),100)
-
+        mask = cv2.inRange(hsv, self.low_skin, self.high_skin)
+        mask = cv2.erode(mask, self.kernel, iterations = 2)
+        mask = dilate(mask, self.kernel, iterations = 4)
+        mask = cv2.GaussianBlur(mask,(4,4),100)
+        return mask
         
-        
-
     def _findHullDefects(self, segment):
         """
         """
         _,contours,hierarchy = cv2.findContours(mask,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-        
         max_contour = max(contours, key = lambda x: cv2.contourArea(x))
-        
-        epsilon = 0.0005*cv2.arcLength(max_contour, True)
-        approx= cv2.approxPolyDP(max_contour, epsilon, True)
+        epsilon = 0.005*cv2.arcLength(max_contour, True)
+        max_contour = cv2.approxPolyDP(max_contour, epsilon, True)
 
         hull = cv2.convexHull(max_contour)
         defects = cv2.convexityDefects(max_contour, hull)
 
         return (max_contour, defects)
 
-##        # define area of hull and area of hand
-##        areahull = cv2.contourArea(hull)
-##        areacnt = cv2.contourArea(max_contour)
-
-    def _detectGesture(self, contours, defects, d_roi):
+    def _detectGesture(self, contours, defects, img):
         """
         """
         if defects is None:
-            return ['0', d_roi]
+            return ['0', img]
 
         if len(defects) <= 2:
-            return ['0', d_roi]
+            return ['0', img]
 
         num_fingers = 1
 
@@ -71,17 +63,16 @@ class HandGestureRecognition:
             cv2.line(d_roi, start, end, [0, 255, 0], 2)
 
             if angle_rad(np.subtract(start, far),
-                         np.subtract(end, far)) < deg2rad(self.thresh_deg):
-
+                         np.subtract(end, far)) < deg2rad(self.angle_cuttoff):
                 num_fingers += 1
 
                 # draw point as green
-                cv2.circle(d_roi, far, 5, [0, 255, 0], -1)
+                cv2.circle(img, far, 5, [0, 255, 0], -1)
             else:
                 # draw point as red
-                cv2.circle(d_roi, far, 5, [255, 0, 0], -1)
+                cv2.circle(img, far, 5, [255, 0, 0], -1)
 
-        return (min(5, num_fingers), d_roi)
+        return (min(5, num_fingers), img)
 
     def angleRad(v1, v2):
         """Convert degrees to radians

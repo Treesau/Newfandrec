@@ -14,7 +14,6 @@ class Recognition:
     path_facemodel = "./caffe_models/face_classifier.caffemodel"
     path_faceproto = "./caffe_models/face_classifier.prototxt.txt"
     facenet = cv2.dnn.readNetFromCaffe(path_faceproto, path_facemodel)
-    
     hand_detector = dlib.simple_object_detector("detector.svm")
     gesture_recognizer = HandGestureRecognition()
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -141,11 +140,9 @@ class Recognition:
             
             for (startX,startY,endX,endY) in faces:
                 y = startY - 10 if startY - 10 > 10 else startY + 10
-                gray = cv2.UMat(gray, [startY,endY], [startX,endX])
-                gray = cv2.resize(gray, (100, 100))
-                user_id, confidence = self.recognizer.predict(cv2.UMat(gray,
-                                                                       [startY,endY],
-                                                                       [startX,endX]))
+                gray_face = cv2.UMat(gray, [startY,endY], [startX,endX])
+                gray_face = cv2.resize(gray, (100, 100))
+                user_id, confidence = self.recognizer.predict(cv2.UMat(gray_face))
                 if confidence <= 80:
                     db = DBHelper()
                     username = db.getUsernameById(user_id)
@@ -173,7 +170,9 @@ class Recognition:
             if timed_out:
                 self.gesture_trackers.clear()
             x,y,w,h = roi
-            gest, processed_roi = self.gesture_recognizer.recognize(frame[y:y+h,x:x+w])
+            gest, processed_roi = self.gesture_recognizer.recognize(cv2.UMat(frame,
+                                                                             [y,y+h],
+                                                                             [x,x+w]))
             #frame[startY-s:endY+s,startX-s:endX+s] = processed_roi
             self.last_gest = gest
     
