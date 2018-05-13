@@ -136,7 +136,11 @@ class Recognition:
         gesture = "0"
         num_fingers = 0
 
+<<<<<<< HEAD
         if self.gesture_trackers:
+=======
+        if self.gesture_trackers.empty():
+>>>>>>> 5d4025dda620de70ee98e6b940b4ad8ad617c3bf
             d_frame, faces = self._findFaces(frame)
             
             for (startX,startY,endX,endY) in faces:
@@ -169,12 +173,19 @@ class Recognition:
             return (d_frame, username, gesture)
 
         else:
+<<<<<<< HEAD
             timed_out, roi = self.gesture_trackers[0].update(frame)
             if timed_out:
                 self.gesture_trackers.clear()
             x,y,w,h = roi
             gest, processed_roi = self.gesture_recognizer.recognize(frame[y:y+h,x:x+w])
             #frame[startY-s:endY+s,startX-s:endX+s] = processed_roi
+=======
+            s = 15
+            gest, d_hand = self.gesture_recognizer.recognize(depth[startY-s:endY+s,
+                                                                               startX-s:endX+s])
+            d_frame[startY-s:endY+s,startX-s:endX+s] = d_hand
+>>>>>>> 5d4025dda620de70ee98e6b940b4ad8ad617c3bf
             self.last_gest = gest
     
 
@@ -252,7 +263,10 @@ class GestureTracker:
     gesture_timeout = 3
     
     def __init__(self, frame, rect):
+<<<<<<< HEAD
         self.timed_out = False
+=======
+>>>>>>> 5d4025dda620de70ee98e6b940b4ad8ad617c3bf
         self.start_time = time.time()
         self.corr_tracker = dlib.correlation_tracker()
         startX,startY,endX,endY = rect
@@ -260,9 +274,12 @@ class GestureTracker:
                                                             endX, endY))
 
     def update(self, frame):
+<<<<<<< HEAD
         if (time.time() - self.start_time) >= self.gesture_timeout:
             self.timed_out = True
             
+=======
+>>>>>>> 5d4025dda620de70ee98e6b940b4ad8ad617c3bf
         tracking_quality = self.corr_tracker.update(frame)
         if tracking_quality >= 7:
             tracked_position = tracker.get_position()
@@ -273,8 +290,12 @@ class GestureTracker:
             cv2.rectangle(frame, (x, y),
                           (x + w, y + h),
                           (0,255,0), 2)
+<<<<<<< HEAD
             
             return (self.timed_out, (x,y,w,h))
+=======
+            return (x,y,w,h)
+>>>>>>> 5d4025dda620de70ee98e6b940b4ad8ad617c3bf
         
 
 
