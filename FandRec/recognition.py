@@ -136,7 +136,7 @@ class Recognition:
         gesture = "0"
         num_fingers = 0
 
-        if self.gesture_trackers.empty():
+        if self.gesture_trackers:
             d_frame, faces = self._findFaces(frame)
             
             for (startX,startY,endX,endY) in faces:
@@ -169,10 +169,12 @@ class Recognition:
             return (d_frame, username, gesture)
 
         else:
-            s = 15
-            gest, d_hand = self.gesture_recognizer.recognize(depth[startY-s:endY+s,
-                                                                               startX-s:endX+s])
-            d_frame[startY-s:endY+s,startX-s:endX+s] = d_hand
+            timed_out, roi = self.gesture_trackers[0].update(frame)
+            if timed_out:
+                self.gesture_trackers.clear()
+            x,y,w,h = roi
+            gest, processed_roi = self.gesture_recognizer.recognize(frame[y:y+h,x:x+w])
+            #frame[startY-s:endY+s,startX-s:endX+s] = processed_roi
             self.last_gest = gest
     
 
@@ -250,6 +252,7 @@ class GestureTracker:
     gesture_timeout = 3
     
     def __init__(self, frame, rect):
+        self.timed_out = False
         self.start_time = time.time()
         self.corr_tracker = dlib.correlation_tracker()
         startX,startY,endX,endY = rect
@@ -257,6 +260,9 @@ class GestureTracker:
                                                             endX, endY))
 
     def update(self, frame):
+        if (time.time() - self.start_time) >= self.gesture_timeout:
+            self.timed_out = True
+            
         tracking_quality = self.corr_tracker.update(frame)
         if tracking_quality >= 7:
             tracked_position = tracker.get_position()
@@ -267,7 +273,8 @@ class GestureTracker:
             cv2.rectangle(frame, (x, y),
                           (x + w, y + h),
                           (0,255,0), 2)
-            return (x,y,w,h)
+            
+            return (self.timed_out, (x,y,w,h))
         
 
 
@@ -293,9 +300,3 @@ if __name__ == "__main__":
         cv2.waitKey(1)
     cam.release()
     cv2.destroyAllWindows()
-
-    
-        
-        
-                
-    

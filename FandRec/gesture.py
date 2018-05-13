@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import math
 
-class HandGestureRecognitions:
+class HandGestureRecognition:
     """
     """
     low_skin = np.array([0,20,70], dtype=np.uint8)
