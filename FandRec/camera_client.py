@@ -31,7 +31,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 #==============================Imports=======================================
-import sys, ujson, cv2
+import sys, ujson, cv2, imutils
 import numpy as np
 
 from twisted.python import log
@@ -43,6 +43,8 @@ from autobahn.twisted.websocket import WebSocketClientFactory, \
 
 from twisted.internet import reactor
 
+from imutils.video import WebcamVideoStream
+
 #=======================Application Interface===========================
 
 class CameraClientProtocol(WebSocketClientProtocol):
@@ -53,8 +55,7 @@ class CameraClientProtocol(WebSocketClientProtocol):
     #raw_frame = cv2.UMat(np.empty((540, 1172, 3), np.uint8))
 
     def __init__(self):
-        self.raw_frame = cv2.UMat(np.empty((540, 960), np.uint8))
-        self.fps = 15
+        self.fps = 10
 
     def onOpen(self):
         self.sendFrames()
@@ -65,11 +66,11 @@ class CameraClientProtocol(WebSocketClientProtocol):
                      encodes it as a json then sends it.
         """
         # Grab frame
-        self.factory.camera.read()
+        frame = cv2.UMat(self.factory.camera.read())
+        frame = cv2.resize(frame, (640,480))
         
         # Compress and Package frame
-        out = cv2.UMat(self.raw_frame)
-        out = cv2.imencode('.jpg', out, [cv2.IMWRITE_JPEG_QUALITY, 60])[1].tolist()
+        out = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])[1].tolist()
         out = ujson.dumps(out)
 
         # Send frame
@@ -84,7 +85,7 @@ class CameraClientFactory(WebSocketClientFactory):
     def __init__(self, addr, cam_port):
         WebSocketClientFactory.__init__(self, addr, headers={'camera_id': 'camera1'})
         print("Starting Camera")
-        self.camera = cv2.VideoCapture(0)
+        self.camera = WebcamVideoStream(src=0).start()
 
 #=================Client Main===================================
 

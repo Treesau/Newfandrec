@@ -194,7 +194,7 @@ class CameraServerProtocol(WebSocketServerProtocol):
                 #STEP 1: Load in, convert, and decompress frame for use
                 frame = ujson.loads(data.decode("utf8"))
                 frame = np.asarray(frame, np.uint8)
-                frame = cv2.imdecode(frame, cv2.IMREAD_GRAYSCALE)
+                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
                 #post users client name here. 
                 
                 #frame = message
